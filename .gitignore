@@ -1,0 +1,62 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+venv/
+.venv/
+env/
+
+# Environments
+.env
+backend/.env
+frontend/.env
+
+# Node / Frontend
+node_modules/
+dist/
+.eslintcache
+.vite
+frontend/dist/
+frontend/node_modules/
+
+# IDEs and OS
+.vscode/
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+
+# Application Data & Media (contains raw files, databases, PII)
+data/json_records/
+data/logs/
+data/media/
+data/transcripts/
+data/mono_*.wav
+data/voice_analysis.db
+
+# Root level test files
+test_result.txt
+*.wav
+*.csv
+*.sql
+QAscorecard/
+data/*.db
+backend/*.db
+backend/voice_analysis.db
+
+# Scratch/test scripts
+backend/test_s3_local.py
+backend/test_s3.py
+backend/sync_s3.py
+
+# Temporary test scripts
+test_*.py
+
+# Graphify
+graphify/
+.graphify/

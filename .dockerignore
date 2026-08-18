@@ -1,0 +1,51 @@
+# Git
+.git
+.gitignore
+
+# Agents & Graphify
+.Agents/
+graphify/
+.graphify/
+
+# Environments
+.env
+backend/.env
+frontend/.env
+venv/
+.venv/
+env/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.ruff_cache/
+
+# Node / Frontend
+node_modules/
+frontend/node_modules/
+dist/
+frontend/dist/
+.eslintcache
+.vite
+
+# IDEs and OS
+.vscode/
+.idea/
+.DS_Store
+*.swp
+
+# Application Data (prevent copying local databases and media into image)
+data/
+voice_analytics.db
+*.db
+*.sqlite3
+
+# Scratch / Tests
+tests/
+test_result.txt
+*.wav
+*.csv
+*.sql

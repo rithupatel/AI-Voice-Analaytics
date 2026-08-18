@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html>
+<body>
+<div id="waveform"></div>
+<script type="module">
+import WaveSurfer from 'https://cdn.jsdelivr.net/npm/wavesurfer.js@7/dist/wavesurfer.esm.js'
+const ws = WaveSurfer.create({
+  container: '#waveform',
+  waveColor: 'violet',
+  progressColor: 'purple'
+});
+const peaks = [];
+for(let i=0; i<800; i++) peaks.push(Math.random());
+try {
+  ws.load('', [peaks], 10);
+  console.log("Success with [peaks]");
+} catch (e) {
+  console.log("Error:", e);
+}
+</script>
+</body>
+</html>

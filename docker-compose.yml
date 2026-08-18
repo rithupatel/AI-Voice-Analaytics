@@ -1,0 +1,65 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: voice_analysis_backend
+    network_mode: "host"
+    volumes:
+      # Map the data folder to persist recordings and JSON output
+      - ./data:/app/data
+      # Map backend code for hot-reloading (optional, but great for dev)
+      - ./backend/app:/app/backend/app
+      - ./backend/.env:/app/backend/.env
+    env_file:
+      - ./backend/.env
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    runtime: nvidia
+    restart: unless-stopped
+    depends_on:
+      - postgres
+      - redis
+
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: voice_analysis_celery_worker
+    network_mode: "host"
+    volumes:
+      - ./data:/app/data
+      - ./backend/app:/app/backend/app
+      - ./backend/.env:/app/backend/.env
+    env_file:
+      - ./backend/.env
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - CELERY_BROKER_URL=redis://127.0.0.1:6379/0
+      - CELERY_RESULT_BACKEND=redis://127.0.0.1:6379/0
+    runtime: nvidia
+    command: ["celery", "-A", "app.celery_app:celery_app", "worker", "--loglevel=info"]
+    restart: unless-stopped
+    depends_on:
+      - redis
+      - postgres
+
+  redis:
+    image: redis:7-alpine
+    container_name: voice_analysis_redis
+    network_mode: "host"
+    restart: unless-stopped
+
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: dbeaver_tracking_db
+    network_mode: "host"
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: adminpassword
+      POSTGRES_DB: audit_db
+    volumes:
+      - ./data/pg_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
