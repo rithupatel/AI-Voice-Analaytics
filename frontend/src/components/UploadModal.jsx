@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, UploadCloud, Loader2, CheckCircle2 } from 'lucide-react';
 
 export default function UploadModal({ onClose, onUploadSuccess, agentName, showAlert }) {
@@ -9,6 +9,23 @@ export default function UploadModal({ onClose, onUploadSuccess, agentName, showA
   const [localAgentName, setLocalAgentName] = useState(
     agentName && agentName !== 'Select Agent' && agentName !== 'Unknown Agent' ? agentName : ''
   );
+
+  const isActive = uploadState === 'hashing' || uploadState === 'uploading' || uploadState === 'queuing';
+
+  useEffect(() => {
+    const handleGlobalKey = (e) => {
+      if (e.key === 'Escape' && !isActive) onClose();
+    };
+    window.addEventListener('keydown', handleGlobalKey);
+    return () => window.removeEventListener('keydown', handleGlobalKey);
+  }, [onClose, isActive]);
+
+  const handleInputKeyDown = (e) => {
+    if (e.key === 'Enter' && !isActive && files.length > 0) {
+      e.preventDefault();
+      handleSubmit();
+    }
+  };
 
   const processSelectedFiles = (selectedFiles) => {
     if (!selectedFiles || selectedFiles.length === 0) return;
@@ -131,14 +148,15 @@ export default function UploadModal({ onClose, onUploadSuccess, agentName, showA
     }
 
     xhr.open('POST', url);
+    if (window.__JWT_TOKEN__) {
+      xhr.setRequestHeader('Authorization', `Bearer ${window.__JWT_TOKEN__}`);
+    }
     xhr.send(formData);
     } catch (err) {
       setUploadState('error');
       setError('Failed to process or hash the file.');
     }
   };
-
-  const isActive = uploadState === 'hashing' || uploadState === 'uploading' || uploadState === 'queuing';
 
   const stageLabel = () => {
     switch (uploadState) {
@@ -276,6 +294,7 @@ export default function UploadModal({ onClose, onUploadSuccess, agentName, showA
               placeholder="e.g. Agent A, Agent B"
               value={localAgentName}
               onChange={(e) => setLocalAgentName(e.target.value)}
+              onKeyDown={handleInputKeyDown}
               disabled={isActive}
               style={{
                 width: '100%',

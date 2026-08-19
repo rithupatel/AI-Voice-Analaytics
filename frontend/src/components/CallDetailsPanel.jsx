@@ -105,6 +105,27 @@ export default function CallDetailsPanel({
                 <Download size={13} style={{ marginRight: '4px' }} /> 
                 <span className="btn-text" style={{ color: 'white' }}>PDF</span>
               </button>
+              <button 
+                className="btn-secondary"
+                onClick={async () => {
+                  try {
+                    const res = await fetch(`/api/v1/recordings/reprocess/${selectedDetail.id}`, { method: 'POST' });
+                    if (res.ok) {
+                      showAlert("Recording queued for reprocessing!", "success");
+                      setTimeout(() => window.location.reload(), 1500);
+                    } else {
+                      showAlert("Failed to queue reprocessing.", "error");
+                    }
+                  } catch (err) {
+                    showAlert("Error queuing reprocessing.", "error");
+                  }
+                }}
+                style={{ background: 'var(--primary)', color: 'white', borderColor: 'var(--primary)', fontWeight: 600 }}
+                title="Reprocess Recording"
+              >
+                <Activity size={13} style={{ marginRight: '4px' }} /> 
+                <span className="btn-text" style={{ color: 'white' }}>Reprocess</span>
+              </button>
             </div>
           </div>
 

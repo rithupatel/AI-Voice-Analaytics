@@ -5,12 +5,23 @@ export default function CustomDialog({ isOpen, type, title, message, onConfirm, 
   const [isRendered, setIsRendered] = useState(false);
 
   useEffect(() => {
+    const handleGlobalKey = (e) => {
+      if (e.key === 'Escape') {
+        onCancel();
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (onConfirm) onConfirm();
+        else onCancel();
+      }
+    };
     if (isOpen) {
       setTimeout(() => setIsRendered(true), 10); // Small delay to allow CSS transition
+      window.addEventListener('keydown', handleGlobalKey);
     } else {
       setIsRendered(false);
     }
-  }, [isOpen]);
+    return () => window.removeEventListener('keydown', handleGlobalKey);
+  }, [isOpen, onCancel, onConfirm]);
 
   if (!isOpen && !isRendered) return null;
 

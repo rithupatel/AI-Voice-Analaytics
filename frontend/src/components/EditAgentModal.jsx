@@ -8,6 +8,14 @@ export default function EditAgentModal({ agent, existingAgentNames = [], onClose
   const [error, setError] = useState('');
   const [nameError, setNameError] = useState('');
 
+  useEffect(() => {
+    const handleGlobalKey = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleGlobalKey);
+    return () => window.removeEventListener('keydown', handleGlobalKey);
+  }, [onClose]);
+
   const toTitleCase = (str) => {
     return str.split(' ').filter(Boolean).map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
   };

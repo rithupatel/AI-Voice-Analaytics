@@ -1,18 +1,11 @@
 import logging
 import sys
 from contextlib import asynccontextmanager
-from datetime import timedelta
 
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import OAuth2PasswordRequestForm
 
-from app.auth import (
-    ACCESS_TOKEN_EXPIRE_MINUTES,
-    create_access_token,
-    get_password_hash,
-    verify_password,
-)
+from app.auth import get_password_hash, verify_password
 from app.config import settings
 from app.database import init_db
 from app.external_db import init_external_db
@@ -63,36 +56,73 @@ async def root():
         "docs_url": "/docs"
     }
 
-# Dummy user DB for demonstration
-fake_users_db = {
-    "testuser": {
-        "username": "testuser",
-        "hashed_password": get_password_hash("password123"),
-    }
-}
+import random
+import smtplib
+from email.message import EmailMessage
 
-@app.post("/token")
-async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):  # noqa: B008
-    user_dict = fake_users_db.get(form_data.username)
-    if not user_dict:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.database import get_db
+from app.models import User
+
+
+class RequestCodeReq(BaseModel):
+    email: str
+
+class VerifyCodeReq(BaseModel):
+    email: str
+    code: str
+
+@app.post("/api/v1/auth/request-code")
+async def request_code(req: RequestCodeReq, db: AsyncSession = Depends(get_db)):  # noqa: B008
+    if not req.email.endswith(f"@{settings.ALLOWED_DOMAIN}"):
+        raise HTTPException(status_code=403, detail=f"Email must end with @{settings.ALLOWED_DOMAIN}")
     
-    if not verify_password(form_data.password, user_dict["hashed_password"]):
+    code = f"{random.randint(1000, 9999)}"
+    hashed = get_password_hash(code)
+    
+    result = await db.execute(select(User).where(User.username == req.email))
+    user = result.scalars().first()
+    
+    if user:
+        user.hashed_password = hashed
+    else:
+        user = User(username=req.email, hashed_password=hashed)
+        db.add(user)
+    
+    await db.commit()
+    
+    try:
+        msg = EmailMessage()
+        msg['Subject'] = "Your AI Voice Analytics Login Code"
+        msg['From'] = settings.GMAIL_ADDRESS
+        msg['To'] = req.email
+        msg.set_content(f"Hello,\n\nYour login code is: {code}\n\nUse this code to log into the AI Voice Analytics platform.\n\nBest,\nQA Team")
+        
+        with smtplib.SMTP("smtp.gmail.com", 587) as server:
+            server.starttls()
+            server.login(settings.GMAIL_ADDRESS, settings.GMAIL_APP_PASSWORD.replace(" ", ""))
+            server.send_message(msg)
+    except Exception as e:  # noqa: BLE001
+        logger.error(f"Failed to send OTP email: {e}")
+        raise HTTPException(status_code=500, detail="Failed to send email. Please check server logs.")
+        
+    return {"message": "Code sent successfully"}
+
+@app.post("/api/v1/auth/verify-code")
+async def verify_code(req: VerifyCodeReq, db: AsyncSession = Depends(get_db)):  # noqa: B008
+    result = await db.execute(select(User).where(User.username == req.email))
+    user = result.scalars().first()
+    
+    if not user or not verify_password(req.code, user.hashed_password):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
+            detail="Incorrect email or code",
         )
         
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": user_dict["username"]}, expires_delta=access_token_expires
-    )
-    return {"access_token": access_token, "token_type": "bearer"}
+    return {"message": "Login successful", "email": user.username}
 
 if __name__ == "__main__":
     import uvicorn

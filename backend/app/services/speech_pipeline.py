@@ -31,7 +31,7 @@ def get_audio_duration(file_path: str) -> float:
             rate = f.getframerate()
             if rate > 0:
                 return round(frames / float(rate), 2)
-    except Exception:  # noqa: BLE001, S110
+    except (OSError, wave.Error, EOFError, ValueError):
         pass
 
     # 2. Inspect RIFF / WAV byte rate header directly
@@ -44,7 +44,7 @@ def get_audio_duration(file_path: str) -> float:
                 if byte_rate > 0:
                     data_size = max(0, file_size - 44)
                     return round(data_size / float(byte_rate), 2)
-    except Exception:  # noqa: BLE001, S110
+    except (OSError, ValueError):
         pass
 
     # 3. Pydub AudioSegment
@@ -52,7 +52,7 @@ def get_audio_duration(file_path: str) -> float:
         audio = AudioSegment.from_file(file_path)
         if len(audio) > 0:
             return round(len(audio) / 1000.0, 2)
-    except Exception:  # noqa: BLE001, S110
+    except (OSError, ValueError, RuntimeError):
         pass
 
     # 4. Fallback estimation based on 16kHz 16-bit mono PCM sample size (32,000 bytes/sec)
@@ -60,7 +60,7 @@ def get_audio_duration(file_path: str) -> float:
         file_size = os.path.getsize(file_path)
         if file_size > 44:
             return round((file_size - 44) / 32000.0, 2)
-    except Exception:  # noqa: BLE001, S110
+    except (OSError, ValueError):
         pass
 
     return 30.0
@@ -91,7 +91,7 @@ def normalize_audio(input_path: str, output_path: str) -> float:
                 output_path
             ]
             subprocess.run(cmd, check=True, capture_output=True)
-        except Exception as e:  # noqa: BLE001
+        except (subprocess.CalledProcessError, FileNotFoundError, OSError) as e:
             logger.warning(f"FFmpeg subprocess failed ({e}), using fallback.")
             shutil.copyfile(input_path, output_path)
     else:
@@ -246,6 +246,18 @@ def run_mimo_asr(audio_path: str, api_key: str = "") -> tuple[list[dict[str, Any
         logger.error(f"Local Whisper ASR completely failed: {e}")
         raise
 
+def _build_speaker_segments(audio: AudioSegment, aligned_items: list[dict]) -> dict[str, AudioSegment]:
+    speaker_segments = {}
+    for item in aligned_items:
+        spk = item.get("speaker_label", "Unknown")
+        start_ms = int(item.get("start_time", 0.0) * 1000)
+        end_ms = int(item.get("end_time", 0.0) * 1000)
+        chunk = audio[start_ms:end_ms]
+        if spk not in speaker_segments:
+            speaker_segments[spk] = AudioSegment.empty()
+        speaker_segments[spk] += chunk
+    return speaker_segments
+
 def split_audio_by_speaker(audio_path: str, stage3_payload: dict[str, Any], output_dir: str) -> dict[str, str]:
     """
     Slices the normalized mono audio file into separate files for each speaker based on the 
@@ -255,24 +267,11 @@ def split_audio_by_speaker(audio_path: str, stage3_payload: dict[str, Any], outp
     logger.info(f"Slicing audio by speaker for {audio_path}...")
     try:
         audio = AudioSegment.from_file(audio_path, format="wav")
-    except Exception as e:  # noqa: BLE001
+    except (OSError, ValueError, RuntimeError) as e:
         logger.error(f"Failed to load audio for splitting: {e}")
         return {}
 
-    speaker_segments = {}
-    aligned_items = stage3_payload.get("aligned_transcript", [])
-    
-    for item in aligned_items:
-        spk = item.get("speaker_label", "Unknown")
-        start_ms = int(item.get("start_time", 0.0) * 1000)
-        end_ms = int(item.get("end_time", 0.0) * 1000)
-        
-        chunk = audio[start_ms:end_ms]
-        
-        if spk not in speaker_segments:
-            speaker_segments[spk] = AudioSegment.empty()
-            
-        speaker_segments[spk] += chunk
+    speaker_segments = _build_speaker_segments(audio, stage3_payload.get("aligned_transcript", []))
 
     output_paths = {}
     for spk, combined_audio in speaker_segments.items():
@@ -284,53 +283,57 @@ def split_audio_by_speaker(audio_path: str, stage3_payload: dict[str, Any], outp
 
     return output_paths
 
+def _tokenize_text(text: str) -> list[str]:
+    return [w for w in re.findall(r'[a-zA-Z0-9]+', text.lower()) if w]
+
+def _find_phrase_in_tokens(phrase_tokens: list[str], word_tokens: list[dict]) -> list[tuple[float, float]]:
+    ranges = []
+    n = len(phrase_tokens)
+    if n == 0:
+        return ranges
+        
+    i = 0
+    while i <= len(word_tokens) - n:
+        match = True
+        for j in range(n):
+            if word_tokens[i+j]["token"] != phrase_tokens[j]:
+                match = False
+                break
+        if match:
+            start = word_tokens[i]["start_time"]
+            end = word_tokens[i+n-1]["end_time"]
+            ranges.append((start, end))
+            
+            last_word_idx = word_tokens[i+n-1]["word_idx"]
+            while i < len(word_tokens) and word_tokens[i]["word_idx"] <= last_word_idx:
+                i += 1
+        else:
+            i += 1
+    return ranges
+
 def find_pii_timestamps(asr_words: list[dict[str, Any]], pii_phrases: list[str]) -> list[tuple[float, float]]:
     """
     Finds the start and end timestamps of detected PII phrases in the word timestamps list (asr_words).
     Uses alphanumeric tokenization to handle hyphenation, capitalization, and minor punctuation variations.
     """
-    def tokenize(text):
-        return [w for w in re.findall(r'[a-zA-Z0-9]+', text.lower()) if w]
-        
     redaction_ranges = []
+    
+    # Tokenize the asr_words list to align token index to word index
+    word_tokens = []
+    for idx, w_dict in enumerate(asr_words):
+        tokens = _tokenize_text(w_dict.get("word", ""))
+        for t in tokens:
+            word_tokens.append({
+                "token": t,
+                "word_idx": idx,
+                "start_time": w_dict.get("start_time", 0.0),
+                "end_time": w_dict.get("end_time", 0.0)
+            })
+
     for phrase in pii_phrases:
-        phrase_tokens = tokenize(phrase)
-        if not phrase_tokens:
-            continue
-        
-        # Tokenize the asr_words list to align token index to word index
-        word_tokens = []
-        for idx, w_dict in enumerate(asr_words):
-            tokens = tokenize(w_dict.get("word", ""))
-            for t in tokens:
-                word_tokens.append({
-                    "token": t,
-                    "word_idx": idx,
-                    "start_time": w_dict.get("start_time", 0.0),
-                    "end_time": w_dict.get("end_time", 0.0)
-                })
-        
-        # Search for phrase_tokens sequence in word_tokens
-        n = len(phrase_tokens)
-        i = 0
-        while i <= len(word_tokens) - n:
-            match = True
-            for j in range(n):
-                if word_tokens[i+j]["token"] != phrase_tokens[j]:
-                    match = False
-                    break
-            if match:
-                # Find start time of the first matched token and end time of the last matched token
-                start = word_tokens[i]["start_time"]
-                end = word_tokens[i+n-1]["end_time"]
-                redaction_ranges.append((start, end))
-                
-                # Advance pointer past the matched words in the original word list
-                last_word_idx = word_tokens[i+n-1]["word_idx"]
-                while i < len(word_tokens) and word_tokens[i]["word_idx"] <= last_word_idx:
-                    i += 1
-            else:
-                i += 1
+        phrase_tokens = _tokenize_text(phrase)
+        if phrase_tokens:
+            redaction_ranges.extend(_find_phrase_in_tokens(phrase_tokens, word_tokens))
                 
     # Sort and merge overlapping/adjacent redaction ranges
     if not redaction_ranges:
@@ -350,41 +353,46 @@ def find_pii_timestamps(asr_words: list[dict[str, Any]], pii_phrases: list[str])
 
 def beep_audio(audio_path: str, redaction_ranges: list[tuple[float, float]], output_path: str) -> None:
     """
-    Overwrites or generates a new audio file where the specified time ranges (in seconds)
-    are replaced with a sine wave beep sound (1000Hz) using pydub.
+    Mutes (silences) the specified time ranges (in seconds) in the audio file 
+    using FFmpeg stream filtering, bypassing RAM limitations.
     """
     if not redaction_ranges:
         if audio_path != output_path:
             shutil.copyfile(audio_path, output_path)
         return
 
-    logger.info(f"Beeping audio file {audio_path} at ranges: {redaction_ranges}")
+    logger.info(f"Muting audio file {audio_path} at ranges: {redaction_ranges}")
     try:
-        from pydub import AudioSegment
-        from pydub.generators import Sine
-        
-        audio = AudioSegment.from_file(audio_path, format="wav")
-        original_duration_ms = len(audio)
-        
-        # Apply redactions. Since we want to preserve exact timestamps, we replace the slice with a beep
-        # of the identical duration.
-        for start_sec, end_sec in redaction_ranges:
-            start_ms = max(0, int(start_sec * 1000))
-            end_ms = min(original_duration_ms, int(end_sec * 1000))
-            duration_ms = end_ms - start_ms
-            if duration_ms <= 0:
-                continue
-                
-            # Create the sine wave beep matching the input audio frame rate, channels, and sample width
-            beep = Sine(1000).to_audio_segment(duration=duration_ms, volume=-5)
-            beep = beep.set_frame_rate(audio.frame_rate).set_channels(audio.channels).set_sample_width(audio.sample_width)
-            
-            audio = audio[:start_ms] + beep + audio[end_ms:]
-            
-        audio.export(output_path, format="wav")
-        logger.info(f"Successfully exported beeped audio to {output_path}")
-    except Exception:
-        logger.exception(f"Failed to beep audio file {audio_path}:")
+        import imageio_ffmpeg
+        ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+    except ImportError:
+        ffmpeg_exe = shutil.which("ffmpeg")
+
+    if not ffmpeg_exe:
+        logger.error("FFmpeg not found. Cannot apply PII redaction.")
         if audio_path != output_path:
             shutil.copyfile(audio_path, output_path)
+        return
 
+    try:
+        # Build the FFmpeg volume filter string
+        enable_exprs = []
+        for start_sec, end_sec in redaction_ranges:
+            enable_exprs.append(f"between(t,{start_sec},{end_sec})")
+            
+        filter_str = "volume=0:enable='" + "+".join(enable_exprs) + "'"
+        
+        cmd = [
+            ffmpeg_exe, "-y",
+            "-i", audio_path,
+            "-af", filter_str,
+            "-c:a", "pcm_s16le",
+            output_path
+        ]
+        
+        subprocess.run(cmd, check=True, capture_output=True)
+        logger.info(f"Successfully exported muted audio to {output_path}")
+    except (subprocess.CalledProcessError, FileNotFoundError, OSError) as e:
+        logger.error(f"Failed to mute audio file {audio_path}: {e}")
+        if audio_path != output_path:
+            shutil.copyfile(audio_path, output_path)

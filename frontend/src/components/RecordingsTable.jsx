@@ -65,7 +65,17 @@ const RecordingsTable = ({ recordings, selectedId, onSelect, isMobileOrTablet, s
            const progress = getProgressPercentage(r.status);
            const label = getProgressLabel(r.status);
            return (
-              <div key={r.id} className="skeleton-loading-card" style={{ padding: '16px', borderBottom: '1px solid var(--border-light)', background: 'var(--bg-app)', cursor: 'default' }}>
+              <div 
+                key={r.id} 
+                className={`skeleton-loading-card ${isSelected ? 'active-item' : ''}`} 
+                onClick={() => {
+                  onSelect(r.id);
+                  if (isMobileOrTablet && setActiveMobilePanel) {
+                    setActiveMobilePanel('three');
+                  }
+                }}
+                style={{ padding: '16px', borderBottom: '1px solid var(--border-light)', background: 'var(--bg-app)', cursor: 'pointer', transition: 'all 0.2s', border: isSelected ? '1px solid var(--primary)' : '1px solid transparent' }}
+              >
                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
                    <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.title}</span>
                    <span style={{ fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 600 }}>{progress}%</span>

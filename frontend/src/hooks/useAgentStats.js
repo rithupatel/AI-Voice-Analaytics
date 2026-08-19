@@ -54,18 +54,21 @@ export function useAgentStats({
       let trendIcon = "";
       let trendColor = "";
       
-      if (avgScore >= 90) {
+      const thresholdGreen = import.meta.env.VITE_SCORE_THRESHOLD_GREEN ? parseInt(import.meta.env.VITE_SCORE_THRESHOLD_GREEN) : 75;
+      const thresholdYellow = import.meta.env.VITE_SCORE_THRESHOLD_YELLOW ? parseInt(import.meta.env.VITE_SCORE_THRESHOLD_YELLOW) : 50;
+
+      if (avgScore >= thresholdGreen) {
          trendText = "Excellent";
          trendIcon = "📈";
-         trendColor = "#10b981";
-      } else if (avgScore >= 75) {
+         trendColor = "#10b981"; // Green
+      } else if (avgScore >= thresholdYellow) {
          trendText = "Stable";
          trendIcon = "➖";
-         trendColor = "#f59e0b";
+         trendColor = "#f59e0b"; // Yellow
       } else if (avgScore > 0) {
          trendText = "Needs Improvement";
          trendIcon = "📉";
-         trendColor = "#ef4444";
+         trendColor = "#ef4444"; // Red
       } else {
          trendText = "No Data";
          trendIcon = "➖";

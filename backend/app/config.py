@@ -33,6 +33,8 @@ class Settings(BaseSettings):
     LOGS_DIR: str = os.path.join(ROOT_DIR, "data", "logs")
     SYSTEM_LOG_PATH: str = os.path.join(LOGS_DIR, "system.log")
     
+    ALLOWED_DOMAIN: str = os.getenv("ALLOWED_DOMAIN", "gmail.com")
+    
     def reload_env(self):
         load_dotenv(env_path, override=True)
         self.DBEAVER_DB_URL = os.getenv("DBEAVER_DB_URL", "")
@@ -49,7 +51,7 @@ class Settings(BaseSettings):
         self.GMAIL_APP_PASSWORD = os.getenv("GMAIL_APP_PASSWORD", "")
         self.LLM_TEMPERATURE = float(os.getenv("LLM_TEMPERATURE", "0.2"))
         self.REDIS_TTL_SECONDS = int(os.getenv("REDIS_TTL_SECONDS", "86400"))
-        self.JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "")
+        self.ALLOWED_DOMAIN = os.getenv("ALLOWED_DOMAIN", "gmail.com")
         return self.OPENAI_API_KEY
 
 settings = Settings()

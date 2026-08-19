@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, UploadCloud, Plus, Trash2, AlertCircle, Download } from 'lucide-react';
 
 export default function BatchAgentUploadModal({ existingAgentNames = [], departments = [], onClose, onUploadSuccess }) {
@@ -13,6 +13,14 @@ export default function BatchAgentUploadModal({ existingAgentNames = [], departm
     { name: '', email: '', department: '', error: '' }
   ]);
   const [errorCsvContent, setErrorCsvContent] = useState('');
+
+  useEffect(() => {
+    const handleGlobalKey = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleGlobalKey);
+    return () => window.removeEventListener('keydown', handleGlobalKey);
+  }, [onClose]);
 
   const downloadTemplate = () => {
     const csvContent = "Name,Email,Department\n";

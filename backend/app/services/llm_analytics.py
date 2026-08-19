@@ -127,145 +127,78 @@ def analyze_transcript_with_gpt4o_mini(stage3_payload: dict[str, Any], api_key: 
     
     clean_dialogue_text = "\n".join(clean_lines)
 
-    if api_key:
-        try:
-            from openai import OpenAI
-            client = OpenAI(api_key=api_key)
-            
-            # Load system prompt from architecture/system_prompt.md if available
-            prompt_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "architecture", "system_prompt.md")
-            system_prompt = (
-                "You are an expert Service Desk QA analyst. Analyze the following speaker-attributed call transcript "
-                "and perform a detailed QA review of the agent's performance. "
-                "First, identify which speaker is the Agent and which is the Customer based on their roles in the conversation. "
-                "Evaluate the 17 metrics in the qa_scorecard carefully: "
-                "1. greeting_and_verification: Did the agent greet the caller professionally and verify their name or details? (Yes/No/NA) "
-                "2. active_listening_and_empathy: Did the agent show empathy and active listening? (Yes/No/NA) "
-                "3. probing_questions: Did the agent ask appropriate probing questions? (Yes/No/NA) "
-                "4. validate_priority: Did the agent validate the priority or impact? (Yes/No/NA) "
-                "5. accurate_troubleshooting: Did the agent troubleshoot the issue correctly? (Yes/No/NA) "
-                "6. solution_accuracy: Was the solution/resolution accurate? (Yes/No/NA) "
-                "7. valid_escalation: Was the escalation valid if it occurred? (Yes/No/NA) "
-                "8. use_of_knowledge_base: Did the agent use/reference a KB or standard procedure? (Yes/No/NA) "
-                "9. critical_p1_compliance: Was there compliance with standard SLA and critical policies? (Yes/No/NA) "
-                "10. ticket_documentation: Did the agent document/confirm ticket categories? (Yes/No/NA) "
-                "11. time_entry_agreement: Did the agent agree on timeline/SLA? (Yes/No/NA) "
-                "12. ownership_of_incident: Did the agent take clear ownership? (Yes/No/NA) "
-                "13. communication_sla: Did the agent communicate the resolution timeline? (Yes/No/NA) "
-                "14. proper_closing_confirmation: Did the agent confirm satisfaction and close professionally? (Yes/No/NA) "
-                "15. first_call_resolution: Was it resolved on the first contact? (Yes/No/NA) "
-                "16. thirty_minute_rule: Was it handled within 30 minutes? (Yes/No/NA) "
-                "17. minimal_transfers_hold: Were hold/transfer times minimal? (Yes/No/NA) "
-                "Ensure that if the agent greeted the customer and/or verified the customer (e.g. asking for name, email, zip code), "
-                "greeting_and_verification MUST be scored as 'Yes'."
-            )
-            if os.path.exists(prompt_path):
-                try:
-                    with open(prompt_path, "r", encoding="utf-8") as f:
-                        system_prompt = f.read()
-                except Exception as pe:  # noqa: BLE001
-                    logger.warning(f"Could not read system_prompt.md: {pe}")
-            
-            # Load user prompt from architecture/user_prompt.md if available
-            user_prompt_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "architecture", "user_prompt.md")
-            user_prompt = (
-                "Please analyze the following speaker-attributed call transcript. "
-                "Accurately differentiate between individual speakers (e.g. identify Speaker A / Agent vs Speaker B / Customer), "
-                "and evaluate all 17 metrics in the qa_scorecard carefully based on the rules provided in the system prompt.\n\n"
-                f"Transcript:\n{clean_dialogue_text}"
-            )
-            if os.path.exists(user_prompt_path):
-                try:
-                    with open(user_prompt_path, "r", encoding="utf-8") as f:
-                        user_prompt_template = f.read()
-                    user_prompt = user_prompt_template.replace("{transcript}", clean_dialogue_text)
-                except Exception as pe:  # noqa: BLE001
-                    logger.warning(f"Could not read user_prompt.md: {pe}")
+    if not api_key:
+        raise ValueError("OpenAI API key is missing. Cannot perform LLM analysis.")
 
-            response = client.beta.chat.completions.parse(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
-                ],
-                response_format=CallAnalysisSchema,
-                temperature=settings.LLM_TEMPERATURE
-            )
-            
-            parsed_data = response.choices[0].message.parsed
-            return parsed_data.model_dump(), clean_dialogue_text
-        except Exception as e:  # noqa: BLE001
-            logger.warning(f"GPT-4o-mini API analysis failed: {e}. Utilizing internal rule-based analytics engine.")
+    try:
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
+        
+        # Load system prompt from architecture/system_prompt.md if available
+        prompt_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "architecture", "system_prompt.md")
+        system_prompt = (
+            "You are an expert Service Desk QA analyst. Analyze the following speaker-attributed call transcript "
+            "and perform a detailed QA review of the agent's performance. "
+            "First, identify which speaker is the Agent and which is the Customer based on their roles in the conversation. "
+            "Evaluate the 17 metrics in the qa_scorecard carefully: "
+            "1. greeting_and_verification: Did the agent greet the caller professionally and verify their name or details? (Yes/No/NA) "
+            "2. active_listening_and_empathy: Did the agent show empathy and active listening? (Yes/No/NA) "
+            "3. probing_questions: Did the agent ask appropriate probing questions? (Yes/No/NA) "
+            "4. validate_priority: Did the agent validate the priority or impact? (Yes/No/NA) "
+            "5. accurate_troubleshooting: Did the agent troubleshoot the issue correctly? (Yes/No/NA) "
+            "6. solution_accuracy: Was the solution/resolution accurate? (Yes/No/NA) "
+            "7. valid_escalation: Was the escalation valid if it occurred? (Yes/No/NA) "
+            "8. use_of_knowledge_base: Did the agent use/reference a KB or standard procedure? (Yes/No/NA) "
+            "9. critical_p1_compliance: Was there compliance with standard SLA and critical policies? (Yes/No/NA) "
+            "10. ticket_documentation: Did the agent document/confirm ticket categories? (Yes/No/NA) "
+            "11. time_entry_agreement: Did the agent agree on timeline/SLA? (Yes/No/NA) "
+            "12. ownership_of_incident: Did the agent take clear ownership? (Yes/No/NA) "
+            "13. communication_sla: Did the agent communicate the resolution timeline? (Yes/No/NA) "
+            "14. proper_closing_confirmation: Did the agent confirm satisfaction and close professionally? (Yes/No/NA) "
+            "15. first_call_resolution: Was it resolved on the first contact? (Yes/No/NA) "
+            "16. thirty_minute_rule: Was it handled within 30 minutes? (Yes/No/NA) "
+            "17. minimal_transfers_hold: Were hold/transfer times minimal? (Yes/No/NA) "
+            "Ensure that if the agent greeted the customer and/or verified the customer (e.g. asking for name, email, zip code), "
+            "greeting_and_verification MUST be scored as 'Yes'."
+        )
+        if os.path.exists(prompt_path):
+            try:
+                with open(prompt_path, "r", encoding="utf-8") as f:
+                    system_prompt = f.read()
+            except Exception as pe:  # noqa: BLE001
+                logger.warning(f"Could not read system_prompt.md: {pe}")
+        
+        # Load user prompt from architecture/user_prompt.md if available
+        user_prompt_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "architecture", "user_prompt.md")
+        user_prompt = (
+            "Please analyze the following speaker-attributed call transcript. "
+            "Accurately differentiate between individual speakers (e.g. identify Speaker A / Agent vs Speaker B / Customer), "
+            "and evaluate all 17 metrics in the qa_scorecard carefully based on the rules provided in the system prompt.\n\n"
+            f"Transcript:\n{clean_dialogue_text}"
+        )
+        if os.path.exists(user_prompt_path):
+            try:
+                with open(user_prompt_path, "r", encoding="utf-8") as f:
+                    user_prompt_template = f.read()
+                user_prompt = user_prompt_template.replace("{transcript}", clean_dialogue_text)
+            except Exception as pe:  # noqa: BLE001
+                logger.warning(f"Could not read user_prompt.md: {pe}")
 
-    # High-accuracy demonstration analytics fallback matching the transcript domain
-    return {
-        "agent_name": "Martha",
-        "call_summary": "Customer contacted support regarding an unexpected charge on their invoice. The support agent verified the account credentials and successfully issued a credit to rectify the billing discrepancy to the customer's satisfaction.",
-        "overall_sentiment": "POSITIVE",
-        "issue_resolved": True,
-        "understandability_percentage": 95,
-        "knowledgeable_score": 9,
-        "empathy_score": 8,
-        "qa_scorecard": {
-            "greeting_and_verification": "Yes",
-            "active_listening_and_empathy": "Yes",
-            "probing_questions": "Yes",
-            "validate_priority": "Yes",
-            "accurate_troubleshooting": "Yes",
-            "solution_accuracy": "Yes",
-            "valid_escalation": "NA",
-            "use_of_knowledge_base": "NA",
-            "critical_p1_compliance": "Yes",
-            "ticket_documentation": "Yes",
-            "time_entry_agreement": "Yes",
-            "ownership_of_incident": "Yes",
-            "communication_sla": "Yes",
-            "proper_closing_confirmation": "Yes",
-            "first_call_resolution": "Yes",
-            "thirty_minute_rule": "Yes",
-            "minimal_transfers_hold": "Yes"
-        },
-        "speaker_intents": [
-            {
-                "speaker_label": "SPEAKER_00",
-                "display_name": "Speaker A (Agent)",
-                "confidence_level": "HIGH",
-                "emotional_state": "9/10",
-                "frustration_level": "1/10",
-                "calmness_level": "9/10",
-                "perplexity_level": "0/10",
-                "knowledgeability": "9/10",
-                "tone_behavior": "9/10",
-                "primary_intent": "Customer Support & Account Verification",
-                "key_points": [
-                    "Greeted the customer professionally",
-                    "Verified customer account number (987-654-321)",
-                    "Issued billing credit to resolve customer issue"
-                ]
-            },
-            {
-                "speaker_label": "SPEAKER_01",
-                "display_name": "Speaker B (Customer)",
-                "confidence_level": "MEDIUM",
-                "emotional_state": "4/10",
-                "frustration_level": "7/10",
-                "calmness_level": "4/10",
-                "perplexity_level": "3/10",
-                "knowledgeability": "5/10",
-                "tone_behavior": "6/10",
-                "primary_intent": "Billing Inquiry & Dispute Resolution",
-                "key_points": [
-                    "Reported discrepancy on July 15th invoice",
-                    "Provided account details for verification",
-                    "Expressed satisfaction with quick resolution"
-                ]
-            }
-        ],
-        "key_action_items": [
-            "Process billing credit adjustment of recent invoice",
-            "Send updated statement notification email to customer"
-        ]
-    }, clean_dialogue_text
+        response = client.beta.chat.completions.parse(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt}
+            ],
+            response_format=CallAnalysisSchema,
+            temperature=settings.LLM_TEMPERATURE
+        )
+        
+        parsed_data = response.choices[0].message.parsed
+        return parsed_data.model_dump(), clean_dialogue_text
+    except Exception as e:  # noqa: BLE001
+        logger.error(f"GPT-4o-mini API analysis failed: {e}")
+        raise RuntimeError(f"LLM Analytics pipeline failed: {e}")
 
 class EmotionAnalysisSchema(BaseModel):
     emotion: str = Field(description="Primary emotion detected (e.g. Frustrated, Confident, Disappointed, Angry, Calm, Happy)")

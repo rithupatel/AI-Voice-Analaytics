@@ -5,9 +5,14 @@ echo "=============================================="
 echo " Voice Analysis Platform - Setup & Verification "
 echo "=============================================="
 
-echo "[1/4] Installing / Updating Python Dependencies..."
+echo "[1/4] Checking dependencies..."
 cd backend
-pip install -r requirements.txt
+if [ "$1" == "--install" ]; then
+    echo "Installing / Updating Python Dependencies..."
+    pip install -r requirements.txt
+else
+    echo "Skipping dependency installation (run with './setup.sh --install' to update)"
+fi
 
 echo "[2/4] Running Code Quality Linters..."
 ruff check .
@@ -26,7 +31,7 @@ fi
 sudo systemctl start redis-server || echo "Warning: Could not start Redis via systemctl."
 
 echo "Starting Celery Worker..."
-celery -A app.celery_app worker --loglevel=info &
+celery -A app.celery_app worker --concurrency=1 --loglevel=info &
 CELERY_PID=$!
 
 echo "Starting FastAPI Server..."

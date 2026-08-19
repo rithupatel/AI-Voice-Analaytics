@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { Grid, Terminal, Moon, Sun, X } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Grid, Terminal, Moon, Sun, X, LogOut } from 'lucide-react';
 
 import { useAppLogic } from './hooks/useAppLogic';
 import { useAgentStats } from './hooks/useAgentStats';
@@ -16,6 +16,7 @@ import Stage3JsonModal from './components/Stage3JsonModal';
 import EmailModal from './components/EmailModal';
 import SystemLogsView from './components/SystemLogsView';
 import CustomDialog from './components/CustomDialog';
+import LoginBox from './components/LoginBox';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -43,6 +44,7 @@ class ErrorBoundary extends React.Component {
 }
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('token'));
   const logic = useAppLogic();
   const stats = useAgentStats(logic);
 
@@ -57,9 +59,17 @@ export default function App() {
     if (logic.selectedAgent && !logic.selectedId) {
       const agentRecs = logic.recordings.filter(r => (r.agent_name || "Unknown Agent") === logic.selectedAgent);
       const readyRecs = agentRecs.filter(r => r.status === 'COMPLETED' || r.status === 'FAILED');
-      if (readyRecs.length > 0) logic.setSelectedId(readyRecs[0].id);
+      if (readyRecs.length > 0) {
+        logic.setSelectedId(readyRecs[0].id);
+      } else if (agentRecs.length > 0) {
+        logic.setSelectedId(agentRecs[0].id);
+      }
     }
   }, [logic.selectedAgent, logic.recordings, logic.selectedId, logic]);
+
+  if (!isAuthenticated) {
+    return <LoginBox onLoginSuccess={() => setIsAuthenticated(true)} />;
+  }
 
   return (
     <ErrorBoundary>
@@ -70,6 +80,7 @@ export default function App() {
           </div>
           <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', fontSize: '0.95rem', fontWeight: 600, color: '#ffffff', letterSpacing: '0.2px' }}>AI Voice Analytics</div>
           <div className="ribbon-actions-section">
+            <button className="ribbon-icon-btn" title="Logout" onClick={() => { localStorage.removeItem('token'); localStorage.removeItem('userEmail'); window.location.reload(); }}><X size={18} /></button>
             <button className="ribbon-icon-btn" onClick={() => logic.setShowLogsModal(true)}><Terminal size={18} /></button>
             <button className="ribbon-icon-btn" onClick={() => logic.setTheme(logic.theme === 'light' ? 'dark' : 'light')}>
               {logic.theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}

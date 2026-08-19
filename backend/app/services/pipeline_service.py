@@ -19,7 +19,6 @@ from app.services.llm_analytics import (
     scrub_pii_pytorch,
 )
 from app.services.speech_pipeline import (
-    beep_audio,
     find_pii_timestamps,
     normalize_audio,
     run_mimo_asr,
@@ -32,17 +31,19 @@ logger = logging.getLogger("pipeline_service")
 # --- Async DB Helpers for Sync Celery Task ---
 
 async def _get_recording_db(recording_id: str):
-    async with AsyncSessionLocal() as session:
-        result = await session.execute(select(Recording).where(Recording.id == recording_id))
-        rec = result.scalars().first()
-        if not rec:
-            return None
-        return {
-            "id": rec.id,
-            "title": rec.title,
-            "file_path": rec.file_path,
-            "s3_key": rec.s3_key
-        }
+    for attempt in range(5):
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(select(Recording).where(Recording.id == recording_id))
+            rec = result.scalars().first()
+            if rec:
+                return {
+                    "id": rec.id,
+                    "title": rec.title,
+                    "file_path": rec.file_path,
+                    "s3_key": rec.s3_key
+                }
+        await asyncio.sleep(1)
+    return None
 
 async def _update_recording_status(recording_id: str, status: str, duration: float | None = None, error_message: str | None = None):
     async with AsyncSessionLocal() as session:
@@ -177,7 +178,6 @@ def process_voice_analysis_pipeline(recording_id: str):
             if pii_phrases:
                 redaction_ranges = find_pii_timestamps(asr_words, pii_phrases)
                 if redaction_ranges:
-                    beep_audio(normalized_path, redaction_ranges, normalized_path)
                     for w in asr_words:
                         w_start = w.get("start_time", 0.0)
                         w_end = w.get("end_time", 0.0)
@@ -203,6 +203,7 @@ def process_voice_analysis_pipeline(recording_id: str):
                 ts_start = entry.get("start_time", 0.0)
                 ts_end = entry.get("end_time", 0.0)
                 text = entry.get("text", "")
+                text = scrub_pii_pytorch(text)
                 f.write(f"[{ts_start:05.2f} - {ts_end:05.2f}] {speaker}: {text}\n")
 
         # Stage 4: Store in DB

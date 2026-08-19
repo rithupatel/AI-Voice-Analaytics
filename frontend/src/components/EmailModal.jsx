@@ -1,11 +1,26 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Send, Paperclip } from 'lucide-react';
 
 export default function EmailModal({ onClose, agentEmail, defaultSubject, defaultBody, pdfBase64, pdfFilename, showAlert }) {
-  const [toEmail, setToEmail] = useState(agentEmail || '');
+  const [toEmail, setToEmail] = useState(localStorage.getItem('userEmail') || agentEmail || '');
   const [subject, setSubject] = useState(defaultSubject || '');
   const [body, setBody] = useState(defaultBody || '');
   const [isSending, setIsSending] = useState(false);
+
+  useEffect(() => {
+    const handleGlobalKey = (e) => {
+      if (e.key === 'Escape') {
+        onClose();
+      } else if (e.key === 'Enter') {
+        if (e.target.tagName !== 'TEXTAREA' && e.target.tagName !== 'BUTTON' && !isSending) {
+          e.preventDefault();
+          handleSend();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleGlobalKey);
+    return () => window.removeEventListener('keydown', handleGlobalKey);
+  }, [onClose, isSending, toEmail, subject, body, pdfBase64, pdfFilename, showAlert]);
 
   const handleSend = async () => {
     if (!toEmail.trim()) {

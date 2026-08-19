@@ -21,6 +21,14 @@ export default function Stage3JsonModal({ recordingId, onClose }) {
       });
   }, [recordingId]);
 
+  useEffect(() => {
+    const handleGlobalKey = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleGlobalKey);
+    return () => window.removeEventListener('keydown', handleGlobalKey);
+  }, [onClose]);
+
   const handleCopy = () => {
     if (jsonData) {
       navigator.clipboard.writeText(JSON.stringify(jsonData, null, 2));

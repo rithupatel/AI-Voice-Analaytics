@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, UserPlus, AlertCircle } from 'lucide-react';
 
 export default function AddAgentModal({ existingAgentNames = [], departments = [], onClose, onAdd }) {
@@ -7,6 +7,14 @@ export default function AddAgentModal({ existingAgentNames = [], departments = [
   const [department, setDepartment] = useState('');
   const [error, setError] = useState('');
   const [nameError, setNameError] = useState('');
+
+  useEffect(() => {
+    const handleGlobalKey = (e) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', handleGlobalKey);
+    return () => window.removeEventListener('keydown', handleGlobalKey);
+  }, [onClose]);
 
   const toTitleCase = (str) => {
     return str.split(' ').filter(Boolean).map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
@@ -18,7 +26,8 @@ export default function AddAgentModal({ existingAgentNames = [], departments = [
     setNameError('');
     setError('');
     
-    if (existingAgentNames.includes(toTitleCase(newName.trim()))) {
+    const existingLower = existingAgentNames.map(n => n.toLowerCase());
+    if (existingLower.includes(newName.trim().toLowerCase())) {
       setNameError("Name already exists");
     }
   };
@@ -47,7 +56,8 @@ export default function AddAgentModal({ existingAgentNames = [], departments = [
       return;
     }
 
-    if (existingAgentNames.includes(cleanName)) {
+    const existingLower = existingAgentNames.map(n => n.toLowerCase());
+    if (existingLower.includes(cleanName.toLowerCase())) {
       setNameError("Name already exists");
       return;
     }

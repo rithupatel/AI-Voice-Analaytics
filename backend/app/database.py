@@ -22,7 +22,12 @@ async def init_db():
             await conn.execute(text("ALTER TABLE agent_states ADD COLUMN email VARCHAR"))
         except Exception:  # noqa: BLE001, S110
             pass
-            
+
+        try:
+            from sqlalchemy import text
+            await conn.execute(text("ALTER TABLE agent_states ADD COLUMN department VARCHAR"))
+        except Exception:  # noqa: BLE001, S110
+            pass
         # Add new SOT columns for Recordings
         try:
             from sqlalchemy import text
@@ -42,3 +47,6 @@ async def init_db():
                     pass
         except Exception:  # noqa: BLE001, S110
             pass
+
+
+

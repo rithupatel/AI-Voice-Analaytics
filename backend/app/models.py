@@ -20,6 +20,14 @@ from app.database import Base
 def generate_uuid():
     return str(uuid.uuid4())
 
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(String, primary_key=True, default=generate_uuid)
+    username = Column(String, unique=True, index=True, nullable=False)
+    hashed_password = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
 class Recording(Base):
     __tablename__ = "recordings"
 
@@ -95,6 +103,7 @@ class AgentState(Base):
     
     agent_name = Column(String, primary_key=True)
     email = Column(String, nullable=True)
+    department = Column(String, nullable=True)
     active = Column(Boolean, default=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

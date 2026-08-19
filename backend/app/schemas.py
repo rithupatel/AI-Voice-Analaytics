@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 
 
 class SpeakerBase(BaseModel):
@@ -93,9 +93,14 @@ class RecordingDetailOut(RecordingListItem):
         from_attributes = True
 
 class EmailRequest(BaseModel):
-    to_email: str
+    to_email: EmailStr
     subject: str
     body: str
     pdf_base64: str
     pdf_filename: str
 
+class AgentCreate(BaseModel):
+    name: str
+    email: str | None = None
+    department: str | None = None
+    disabled: bool | None = False
